@@ -33,7 +33,13 @@ find_package(catkin REQUIRED COMPONENTS
   image_geometry
   jsk_footstep_msgs
   interactive_markers
-  laser_assembler moveit_ros_perception)
+  laser_assembler
+  octomap_server
+  octomap_ros
+  octomap_msgs
+  kdl_parser
+  kdl_conversions
+  )
 # only run in hydro
 if(NOT $ENV{ROS_DISTRO} STREQUAL "groovy")
   find_package(PCL REQUIRED)
@@ -68,13 +74,13 @@ add_service_files(FILES SwitchTopic.srv
   EnvironmentLock.srv
   PolygonOnEnvironment.srv
   ICPAlignWithBox.srv
-  ICPAlign.srv)
+  ICPAlign.srv
+  CheckCollision.srv)
 
 # generate the dynamic_reconfigure config file
 generate_dynamic_reconfigure_options(
   cfg/PolygonArrayAreaLikelihood.cfg
-  cfg/InteractiveCuboidLikelihood.cfg
-  cfg/PlaneSupportedCuboidEstimator.cfg
+  cfg/cuboid_parameter.cfg
   cfg/ExtractParticlesTopNBase.cfg
   cfg/PoseWithCovarianceStampedToGaussianPointCloud.cfg
   cfg/HeightmapMorphologicalFiltering.cfg
@@ -126,12 +132,15 @@ generate_dynamic_reconfigure_options(
   cfg/SupervoxelSegmentation.cfg
   cfg/FeatureRegistration.cfg
   cfg/FisheyeSphere.cfg
+  cfg/MovingLeastSquareSmoothing.cfg
+  cfg/OctreeChangePublisher.cfg
   )
 
 find_package(OpenCV REQUIRED core imgproc)
 
 include_directories(include ${catkin_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS} ${PCL_INCLUDE_DIRS})
-link_libraries(${catkin_LIBRARIES} ${pcl_ros_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
+link_directories(${catkin_LIBRARY_DIRS})
+
 macro(jsk_pcl_nodelet _nodelet_cpp _nodelet_class _single_nodelet_exec_name)
   jsk_nodelet(${_nodelet_cpp} ${_nodelet_class} ${_single_nodelet_exec_name}
     jsk_pcl_nodelet_sources jsk_pcl_nodelet_executables)
@@ -161,6 +170,7 @@ jsk_pcl_nodelet(src/keypoints_publisher_nodelet.cpp "jsk_pcl/KeypointsPublisher"
 jsk_pcl_nodelet(src/hinted_plane_detector_nodelet.cpp "jsk_pcl/HintedPlaneDetector" "hinted_plane_detector")
 # jsk_pcl_nodelet(src/pointcloud_throttle_nodelet.cpp "jsk_pcl/NodeletPointCloudThrottle" "point_cloud_throttle")
 jsk_pcl_nodelet(src/centroid_publisher_nodelet.cpp "jsk_pcl/CentroidPublisher" "centroid_publisher")
+jsk_pcl_nodelet(src/moving_least_square_smoothing_nodelet.cpp "jsk_pcl/MovingLeastSquareSmoothing" "moving_least_square_smoothing")
 jsk_pcl_nodelet(src/fisheye_sphere_publisher_nodelet.cpp "jsk_pcl/FisheyeSpherePublisher" "fisheye_sphere_publisher")
 # jsk_pcl_nodelet(src/image_throttle_nodelet.cpp
 #   "jsk_pcl/NodeletImageThrottle" "image_throttle")
@@ -217,6 +227,8 @@ jsk_pcl_util_nodelet(src/polygon_array_area_likelihood_nodelet.cpp
   "jsk_pcl/PolygonArrayAreaLikelihood" "polygon_array_area_likelihood")
 jsk_pcl_util_nodelet(src/polygon_array_angle_likelihood_nodelet.cpp
   "jsk_pcl/PolygonArrayAngleLikelihood" "polygon_array_angle_likelihood")
+jsk_pcl_util_nodelet(src/polygon_array_foot_angle_likelihood_nodelet.cpp
+  "jsk_pcl/PolygonArrayFootAngleLikelihood" "polygon_array_foot_angle_likelihood")
 jsk_pcl_util_nodelet(src/pose_with_covariance_stamped_to_gaussian_pointcloud_nodelet.cpp
   "jsk_pcl/PoseWithCovarianceStampedToGaussianPointCloud" "pose_with_covariance_stamped_to_gaussian_pointcloud")
 jsk_pcl_util_nodelet(src/spherical_pointcloud_simulator_nodelet.cpp
@@ -274,10 +286,10 @@ jsk_pcl_nodelet(src/region_growing_multiple_plane_segmentation_nodelet.cpp
   "region_growing_multiple_plane_segmentation")
 
 if(NOT $ENV{ROS_DISTRO} STREQUAL "groovy")
-  IF(${PCL_VERSION} VERSION_GREATER "1.7.1")
+  IF(${PCL_VERSION} VERSION_GREATER "1.7.2")
     jsk_pcl_nodelet(src/organized_edge_detector_nodelet.cpp
       "jsk_pcl/OrganizedEdgeDetector" "organized_edge_detector")
-  ENDIF(${PCL_VERSION} VERSION_GREATER "1.7.1")
+  ENDIF(${PCL_VERSION} VERSION_GREATER "1.7.2")
 endif(NOT $ENV{ROS_DISTRO} STREQUAL "groovy")
 
 jsk_pcl_nodelet(src/edge_depth_refinement_nodelet.cpp
@@ -326,6 +338,8 @@ jsk_pcl_nodelet(src/roi_clipper_nodelet.cpp
   "jsk_pcl/ROIClipper" "roi_clipper")
 jsk_pcl_nodelet(src/point_indices_to_mask_image_nodelet.cpp
   "jsk_pcl/PointIndicesToMaskImage" "point_indices_to_mask_image")
+jsk_pcl_nodelet(src/extract_indices_nodelet.cpp
+  "jsk_pcl/ExtractIndices" "extract_indices")
 jsk_pcl_nodelet(src/mask_image_to_depth_considered_mask_image_nodelet.cpp
   "jsk_pcl/MaskImageToDepthConsideredMaskImage" "mask_image_to_depth_considered_mask_image")
 jsk_pcl_nodelet(src/mask_image_to_point_indices_nodelet.cpp
@@ -387,6 +401,16 @@ if (PCL_GPU_KINFU_LARGE_SCALE_FOUND)
 endif (PCL_GPU_KINFU_LARGE_SCALE_FOUND)
 jsk_pcl_nodelet(src/pcd_reader_with_pose_nodelet.cpp
   "jsk_pcl/PCDReaderWithPose" "pcd_reader_with_pose")
+# check existence of robot_self_filter package because robot_self_filter is not installed by apt
+pkg_check_modules(robot_self_filter robot_self_filter QUIET)
+if(robot_self_filter_FOUND)
+  jsk_pcl_nodelet(src/collision_detector_nodelet.cpp
+    "jsk_pcl/CollisionDetector" "collision_detector")
+  jsk_pcl_nodelet(src/octomap_server_contact_nodelet.cpp
+    "jsk_pcl/OctomapServerContact" "octomap_server_contact")
+else(robot_self_filter_FOUND)
+  message(AUTHOR_WARNING "robot_self_filter is NOT found. some nodelet depending on robot_self_filter will not be compiled.")
+endif(robot_self_filter_FOUND)
 
 add_library(jsk_pcl_ros_base SHARED
   src/region_adjacency_graph.cpp
@@ -405,11 +429,26 @@ else (PCL_GPU_KINFU_LARGE_SCALE_FOUND)
     ${catkin_LIBRARIES} ${pcl_ros_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp
     jsk_pcl_ros_base)
 endif (PCL_GPU_KINFU_LARGE_SCALE_FOUND)
+if (robot_self_filter_FOUND)
+  include_directories(include ${robot_self_filter_INCLUDE_DIRS})
+  target_link_libraries(jsk_pcl_ros ${robot_self_filter_LIBRARIES})
+endif (robot_self_filter_FOUND)
 
 add_dependencies(jsk_pcl_ros ${PROJECT_NAME}_gencpp ${PROJECT_NAME}_gencfg)
 add_dependencies(jsk_pcl_ros_util ${PROJECT_NAME}_gencpp ${PROJECT_NAME}_gencfg)
 add_dependencies(jsk_pcl_ros_base ${PROJECT_NAME}_gencpp ${PROJECT_NAME}_gencfg)
 add_dependencies(jsk_pcl_ros_moveit ${PROJECT_NAME}_gencpp ${PROJECT_NAME}_gencfg)
+
+target_link_libraries(jsk_pcl_ros_util
+  ${catkin_LIBRARIES} ${pcl_ros_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp
+  jsk_pcl_ros_base)
+target_link_libraries(jsk_pcl_ros_base
+  ${catkin_LIBRARIES} ${pcl_ros_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
+# moveit_ros_perception is excluded from catkin COMPONENTS because of collision about octomap dependency
+find_package(moveit_ros_perception)
+target_link_libraries(jsk_pcl_ros_moveit
+  ${catkin_LIBRARIES} ${moveit_ros_perception_LIBRARIES} ${pcl_ros_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
+
 
 # bench/ directory
 
@@ -422,6 +461,7 @@ target_link_libraries(sample_cube_nearest_point jsk_pcl_ros_base)
 
 # tool/ directory
 add_executable(range_sensor_error_visualization tool/range_sensor_error_visualization.cpp)
+target_link_libraries(range_sensor_error_visualization jsk_pcl_ros)
 add_executable(depth_camera_error_visualization tool/depth_camera_error_visualization.cpp)
 target_link_libraries(depth_camera_error_visualization jsk_pcl_ros)
 
@@ -431,7 +471,21 @@ set(_include_headers "")
 foreach(_header ${_headers})
   string(FIND "${_header}" kinfu IS_KINFU)
   string(FIND "${_header}" point_types IS_POINT_TYPES)
-  if (${IS_KINFU} EQUAL -1 AND ${IS_POINT_TYPES} EQUAL -1)
+  if(robot_self_filter_FOUND)
+    # Exclude some headers because they include robot_self_filter headers.
+    set(IS_SELF_MASK_URDF_ROBOT -1)
+    set(IS_COLLISION_DETECTOR -1)
+    set(IS_SELF_MASK_NAMED_LINK -1)
+    set(IS_OCTOMAP_SERVER_CONTACT -1)
+  else(robot_self_filter_FOUND)
+    string(FIND "${_header}" self_mask_urdf_robot IS_SELF_MASK_URDF_ROBOT)
+    string(FIND "${_header}" collision_detector IS_COLLISION_DETECTOR)
+    string(FIND "${_header}" self_mask_named_link IS_SELF_MASK_NAMED_LINK)
+    string(FIND "${_header}" octomap_server_contact IS_OCTOMAP_SERVER_CONTACT)
+  endif(robot_self_filter_FOUND)
+  if (${IS_KINFU} EQUAL -1 AND ${IS_POINT_TYPES} EQUAL -1 AND
+      ${IS_SELF_MASK_URDF_ROBOT} EQUAL -1 AND ${IS_COLLISION_DETECTOR} EQUAL -1 AND
+      ${IS_SELF_MASK_NAMED_LINK} EQUAL -1 AND ${IS_OCTOMAP_SERVER_CONTACT} EQUAL -1)
     set(_include_headers "${_include_headers}#include \"${_header}\"\n")
   endif()
 endforeach()
@@ -441,8 +495,10 @@ execute_process(
   )
 
 configure_file(src/build_check.cpp.in build_check.cpp)
-add_executable(build_check build_check.cpp)
+add_executable(build_check EXCLUDE_FROM_ALL build_check.cpp)
 target_link_libraries(build_check jsk_pcl_ros jsk_pcl_ros_base jsk_pcl_ros_util jsk_pcl_ros_moveit)
+add_dependencies(run_tests build_check)
+
 generate_messages(DEPENDENCIES
   ${PCL_MSGS} sensor_msgs geometry_msgs jsk_recognition_msgs jsk_footstep_msgs)
 

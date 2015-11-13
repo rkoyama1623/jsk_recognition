@@ -27,11 +27,24 @@ It also publishes tf of centroids of each cluster and oriented bounding box of t
 
    Array of oriented bounding box for each segmented cluster.
 
+* `~label` (`sensor_msgs/Image`):
+
+   Label image for each cluster point indices.
+   You can visualize it with [jsk\_perception/ColorizeLabels](../jsk_perception/nodes/colorize_labels.md)
+
+* `~mask` (`sensor_msgs/Image`):
+
+   Mask image generated from cluster point indices.
+
+* `~negative_indices` (`pcl_msgs/PointIndices`)
+
+  Point indices which are not included in input indices.
+
 ## Parameters
-* `~publish_tf` (Boolean, default: `True`):
+* `~publish_tf` (Boolean, default: `False`):
 
    Toggle tf publishing.
-* `~publish_clouds` (Boolean, default: `True`):
+* `~publish_clouds` (Boolean, default: `False`):
 
    Toggle `~output%02d` topics.
 * `~align_boxes` (Boolean, default: `False`):

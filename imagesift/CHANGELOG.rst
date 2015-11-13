@@ -2,6 +2,15 @@
 Changelog for package imagesift
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.3.6 (2015-09-11)
+------------------
+* [imagesift] Add doc
+* [imagesift] Add comments on sample launch
+* Contributors: Kentaro Wada
+
+0.3.5 (2015-09-09)
+------------------
+
 0.3.4 (2015-09-07)
 ------------------
 

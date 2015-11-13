@@ -25,6 +25,8 @@ catkin_package(
  CATKIN_DEPENDS jsk_recognition_msgs pcl_ros visualization_msgs
 )
 
+catkin_python_setup()
+
 find_package(OpenCV REQUIRED core imgproc)
 find_package(PkgConfig)
 pkg_check_modules(yaml_cpp yaml-cpp REQUIRED)
@@ -60,6 +62,7 @@ add_library(jsk_recognition_utils SHARED
   src/geo/cylinder.cpp
   src/geo/grid_plane.cpp
   )
+add_executable(echo_tf_lookup_transform test/echo_tf_lookup_transform.cpp)
 
 install(TARGETS jsk_recognition_utils
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
