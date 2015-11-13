@@ -1,12 +1,20 @@
 <launch>
   <node pkg="image_transport_tutorial" type="picture_publisher" name="picture_publisher"
-        args="$(find image_transport_tutorial)/data/line.png">
+        args="$(find image_transport_tutorial)/data/line_blure.png">
     <remap from="camera/image" to="/image_raw" />
   </node>
+
+
+
   <node pkg="image_proc" type="image_proc" name="image_proc">
     <remap from="/image_raw" to="/image_raw" />
     <remap from="/image_mono" to="/image_mono" />
   </node>
+
+  <node pkg="jsk_perception" type="gaussian_blur" name="gaussian_blur">
+    <remap from="input" to="/image_raw" />
+  </node>
+
   <node pkg="jsk_perception" type="hough_lines" name="line_detector">
     <remap from="image" to="/image_mono" />
   </node>
