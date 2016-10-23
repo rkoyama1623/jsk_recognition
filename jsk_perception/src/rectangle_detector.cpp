@@ -9,7 +9,7 @@
 #include <jsk_topic_tools/log_utils.h>
 #include <message_filters/subscriber.h>
 #include <message_filters/time_synchronizer.h>
-#include <jsk_recognition_msgs/LineArray.h>
+#include <opencv_apps/LineArrayStamped.h>
 #include <jsk_perception/RectangleDetectorConfig.h>
 #include <image_transport/image_transport.h>
 #include <cv_bridge/cv_bridge.h>
@@ -35,8 +35,8 @@ class RectangleDetector
     //int subscriber_count_;
 
     message_filters::Subscriber<sensor_msgs::Image> *image_sub;
-    message_filters::Subscriber<jsk_recognition_msgs::LineArray> *line_sub;
-    TimeSynchronizer<sensor_msgs::Image, jsk_recognition_msgs::LineArray> *sync;
+    message_filters::Subscriber<opencv_apps::LineArrayStamped> *line_sub;
+    TimeSynchronizer<sensor_msgs::Image, opencv_apps::LineArrayStamped> *sync;
 
     double _threshold1;
     double _threshold2;
@@ -95,7 +95,7 @@ class RectangleDetector
     }
 
     void callback(const sensor_msgs::ImageConstPtr& image,
-                  const jsk_recognition_msgs::LineArrayConstPtr& line)
+                  const opencv_apps::LineArrayStampedConstPtr& line)
     {
         // Transform the image.
         try
@@ -111,8 +111,8 @@ class RectangleDetector
                 for (int i = 0; i < lines.size(); i++)
                     {
                         cv::Vec4i v;
-                        v[0] = line->lines[i].x1; v[1] = line->lines[i].y1;
-                        v[2] = line->lines[i].x2; v[3] = line->lines[i].y2;
+                        v[0] = line->lines[i].pt1.x; v[1] = line->lines[i].pt1.y;
+                        v[2] = line->lines[i].pt2.x; v[3] = line->lines[i].pt2.y;
                         lines[i][0] = 0;
                         lines[i][1] = ((float)v[1] - v[3]) / (v[0] - v[2]) * -v[0] + v[1];
                         lines[i][2] = src.cols;
@@ -191,8 +191,8 @@ public:
     {
 
         image_sub = new message_filters::Subscriber<sensor_msgs::Image>(nh_, "image", 1);
-        line_sub = new message_filters::Subscriber<jsk_recognition_msgs::LineArray>(nh_, "lines", 1);
-        sync = new TimeSynchronizer<sensor_msgs::Image, jsk_recognition_msgs::LineArray>(*image_sub, *line_sub, 10);
+        line_sub = new message_filters::Subscriber<opencv_apps::LineArrayStamped>(nh_, "lines", 1);
+        sync = new TimeSynchronizer<sensor_msgs::Image, opencv_apps::LineArrayStamped>(*image_sub, *line_sub, 10);
         sync->registerCallback(boost::bind(&RectangleDetector::callback, this, _1, _2));
         image_pub_ = nh_.advertise<sensor_msgs::Image>("rectangle/image", 1);
 
