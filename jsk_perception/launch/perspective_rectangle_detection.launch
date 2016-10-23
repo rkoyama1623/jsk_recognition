@@ -1,22 +1,67 @@
 <launch>
   <arg name="GUI" value="true" />
-  <node pkg="jsk_perception" type="edge_detector" name="edge_detector" >
-    <remap from="image" to="image_raw" />
-    <param name="threshold1" value="100"/>
-    <param name="threshold2" value="100"/>
-    <param name="apatureSize" value="3"/>
-  </node>
-  <node pkg="jsk_perception" type="hough_lines" name="hough_lines" >
-    <remap from="image" to="edge/image" />
-    <param name="rho" value="1"/>
-    <param name="theta" value="1"/>
-    <param name="threshold" value="70"/>
-    <param name="minLineLength" value="30"/>
-    <param name="maxLineGap" value="10"/>
-  </node>
-  <node pkg="jsk_perception" type="rectangle_detector" name="rectangle_detector" >
-    <remap from="image" to="image_raw" />
-  </node>
+  <arg name="INPUT" default="/image_raw" />
+  <arg name="MANAGER" default="manager" />
+  <arg name="RUN_MANAGER" default="true" />
+  <arg name="NAMESPACE" default="perspective_rectangle_detection" />
+
+  <group ns="$(arg NAMESPACE)">  
+    <node pkg="nodelet" type="nodelet" name="manager"
+          output="screen"
+          args="$(arg MANAGER)"
+          if="$(arg RUN_MANAGER)"/>
+    <node pkg="nodelet"
+          type="nodelet"
+          name="relay"
+          args="standalone jsk_topic_tools/Relay $(arg MANAGER)">
+      <remap from="~input" to="$(arg INPUT)"/>
+      <remap from="~output" to="image"/>
+    </node>
+    <node pkg="nodelet" type="nodelet"
+          args="standalone edge_detection/edge_detection $(arg MANAGER)"
+          name="edge_detection" output="screen">
+      <remap from="image" to="image" />
+      <rosparam>
+        use_camera_info: false
+        debug_view: true
+        edge_type: 0
+        canny_threshold1: 100
+        canny_threshold2: 200
+        apertureSize: 3
+        apply_blur_pre: true
+        postBlurSize: 13
+        postBlurSigma: 3.2
+        apply_blur_post: false
+        L2gradient: false
+      </rosparam>
+    </node>
+    <node pkg="nodelet" type="nodelet"
+          args="standalone hough_lines/hough_lines $(arg MANAGER)"
+          name="hough_lines" output="screen">
+      <remap from="image" to="/rectangle_detection/edge_detection/image" />
+      <rosparam>
+        use_camera_info: false
+        debug_view: true
+        hough_type: 1
+        rho: 1
+        theta: 1
+        threshold: 70
+        minLineLength: 30
+        maxLineGap: 10
+      </rosparam>
+    </node>
+    <node pkg="jsk_perception" type="rectangle_detector" name="rectangle_detector" output="screen">
+      <remap from="image" to="hough_lines/image" />
+      <remap from="lines" to="hough_lines/lines" />
+      <!-- <rosparam> -->
+      <!--   threshold1: 0. -->
+      <!--   threshold2: 0. -->
+      <!--   apertureSize: 0 -->
+      <!--   L2gradient: true -->
+      <!-- </rosparam> -->
+    </node>
+  </group>
+
   <group if="$(arg GUI)">
     <node pkg="image_view" type="image_view" name="edge_view" >
       <remap from="image" to="edge/image" />
