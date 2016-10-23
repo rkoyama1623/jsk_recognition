@@ -129,21 +129,24 @@ class RectangleDetector
                                     corners.push_back(pt);
                             }
                     }
+                ROS_INFO("corners.size: %d", corners.size());
 
                 std::vector<cv::Point2f> approx;
+                ROS_INFO("calc cv::approxPolyDP");
                 cv::approxPolyDP(cv::Mat(corners), approx, cv::arcLength(cv::Mat(corners), true) * 0.02, true);
+                ROS_INFO("ok");
 
                 if (approx.size() != 4)
                     {
-                        JSK_ROS_ERROR("The object is not quadrilateral!");
-                        return ;
+                        JSK_ROS_ERROR("The object is not quadrilateral! (approx.size: %d)", approx.size());
+                        // return ;
                     }
 
                 // Get mass center
                 cv::Point2f center(0,0);
-                for (int i = 0; i < corners.size(); i++)
-                    center += corners[i];
-                center *= (1. / corners.size());
+                for (int i = 0; i < approx.size(); i++)
+                    center += approx[i];
+                center *= (1. / approx.size());
 
                 sortCorners(corners, center);
 

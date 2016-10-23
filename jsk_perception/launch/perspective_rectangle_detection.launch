@@ -1,5 +1,5 @@
 <launch>
-  <arg name="GUI" value="true" />
+  <arg name="GUI" value="false" />
   <arg name="INPUT" default="/image_raw" />
   <arg name="MANAGER" default="manager" />
   <arg name="RUN_MANAGER" default="true" />
@@ -46,8 +46,8 @@
         rho: 1
         theta: 1
         threshold: 70
-        minLineLength: 30
-        maxLineGap: 10
+        minLineLength: 70
+        maxLineGap: 0
       </rosparam>
     </node>
     <node pkg="jsk_perception" type="rectangle_detector" name="rectangle_detector" output="screen">
